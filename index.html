@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shore of Stone — Mamallapuram</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root { --gold: #f1d9a4; --ink: rgba(18, 12, 6, 0.72); --line: rgba(241, 217, 164, 0.4); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #0d0a07; overflow: hidden; }
+    body { font-family: 'Cormorant Garamond', Georgia, serif; color: var(--gold); -webkit-font-smoothing: antialiased; user-select: none; }
+    canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .display { font-family: 'Cinzel', 'Trajan Pro', Georgia, serif; letter-spacing: 0.22em; text-transform: uppercase; }
+    button { font: inherit; color: inherit; }
+    .btn {
+      background: none; color: var(--gold); border: 1px solid rgba(241, 217, 164, 0.6); padding: 13px 34px;
+      font-size: 13px; cursor: pointer; transition: background 0.3s, color 0.3s;
+    }
+    .btn:hover { background: var(--gold); color: #1a120a; }
+    .btn.quiet { border-color: transparent; opacity: 0.7; }
+    .rule { width: 120px; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); margin: 18px auto 0; }
+
+    /* ---- title and end cards ---- */
+    #start, #end {
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 24px; transition: opacity 1.2s ease; z-index: 5;
+      background: radial-gradient(ellipse at center, rgba(13, 10, 7, 0.3) 0%, rgba(13, 10, 7, 0.86) 100%);
+    }
+    #start.loading { background: #0d0a07; }
+    #start.hidden, #end.hidden { opacity: 0; pointer-events: none; }
+    #start h1, #end h1 { font-size: clamp(28px, 5.2vw, 66px); font-weight: 400; margin: 0; text-shadow: 0 2px 30px rgba(0, 0, 0, 0.7); }
+    .sub { font-size: clamp(15px, 1.6vw, 21px); font-style: italic; opacity: 0.85; margin: 14px 0 26px; max-width: 36em; }
+    #status { font-size: 13px; letter-spacing: 0.3em; }
+    #begin { display: none; }
+    #chapters { display: none; gap: 14px; margin: 0 0 26px; flex-wrap: wrap; justify-content: center; }
+    #chapters.on { display: flex; }
+    .card {
+      width: clamp(130px, 15vw, 210px); cursor: pointer; border: 1px solid rgba(241, 217, 164, 0.25); background: rgba(13, 10, 7, 0.55);
+      padding: 0; text-align: left; transition: border-color 0.25s, transform 0.25s;
+    }
+    .card img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; opacity: 0.72; transition: opacity 0.25s; }
+    .card span { display: block; padding: 8px 10px 10px; }
+    .card .n { font-size: 10px; opacity: 0.65; }
+    .card .t { font-size: 15px; letter-spacing: 0.04em; }
+    .card:hover, .card.sel { border-color: var(--gold); transform: translateY(-3px); }
+    .card:hover img, .card.sel img { opacity: 1; }
+    #keys { margin-top: 26px; font-size: 15px; opacity: 0.75; line-height: 1.9; }
+    #keys b, .key { font-family: 'Cinzel', serif; font-weight: 600; font-size: 11px; letter-spacing: 0.12em; border: 1px solid rgba(241, 217, 164, 0.45); padding: 2px 7px; margin: 0 3px; }
+    .row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+    /* ---- black card between chapters ---- */
+    #fade {
+      position: fixed; inset: 0; background: #0a0806; z-index: 6; opacity: 0; pointer-events: none; transition: opacity 0.7s ease;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px;
+    }
+    #fade.on { opacity: 1; pointer-events: auto; }
+    #fadeNum { font-size: 12px; opacity: 0.7; }
+    #fadeTitle { font-size: clamp(26px, 4.4vw, 54px); margin-top: 10px; }
+    #fadeStatus { font-size: 11px; opacity: 0.6; margin-top: 30px; min-height: 1.4em; }
+
+    /* ---- cinematic ---- */
+    #cine { position: fixed; inset: 0; background: #000; z-index: 8; display: none; cursor: pointer; }
+    #cine.on { display: block; }
+    #cineVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    #cine::before, #cine::after { content: ''; position: absolute; left: 0; right: 0; height: 9vh; background: #000; z-index: 1; }
+    #cine::before { top: 0; }
+    #cine::after { bottom: 0; }
+    #cineText { position: absolute; left: 4vw; bottom: 13vh; z-index: 2; text-shadow: 0 2px 16px #000; }
+    #cineNum { font-size: 12px; opacity: 0.8; }
+    #cineTitle { font-size: clamp(22px, 3.4vw, 44px); margin-top: 4px; }
+    #cineSkip { position: absolute; right: 3vw; bottom: 2.6vh; z-index: 2; font-size: 14px; opacity: 0.75; }
+
+    /* ---- HUD ---- */
+    #hud { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1.2s ease; z-index: 3; }
+    #hud.on { opacity: 1; }
+    #objective { position: absolute; top: 26px; left: 30px; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85); }
+    #chapLabel { font-size: 11px; opacity: 0.75; }
+    #objText { font-size: 22px; margin-top: 4px; }
+    #pips { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+    #pips i { width: 9px; height: 9px; transform: rotate(45deg); border: 1px solid var(--gold); transition: background 0.6s, box-shadow 0.6s; }
+    #pips i.lit { background: #ffc864; box-shadow: 0 0 12px #ffb040; }
+    #foes { font-size: 11px; margin-top: 10px; opacity: 0.8; }
+    #vitals { position: absolute; left: 30px; bottom: 26px; width: min(300px, 38vw); }
+    #vitals .label { font-size: 10px; opacity: 0.7; margin-bottom: 5px; text-shadow: 0 1px 6px #000; }
+    .bar { height: 7px; border: 1px solid var(--line); background: rgba(10, 6, 3, 0.55); }
+    .bar > div { height: 100%; transform-origin: left center; transition: transform 0.18s ease-out; }
+    #hpFill { background: linear-gradient(90deg, #b3402c, #e0a04a); }
+    #foeBar { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); width: min(320px, 40vw); text-align: center; opacity: 0; transition: opacity 0.3s; }
+    #foeBar.on { opacity: 1; }
+    #foeName { font-size: 11px; margin-bottom: 6px; text-shadow: 0 1px 8px #000; }
+    #foeFill { background: linear-gradient(90deg, #6e1712, #c2372a); }
+    #prompt {
+      position: absolute; left: 50%; bottom: 16%; transform: translateX(-50%); padding: 10px 22px; font-size: 19px;
+      background: var(--ink); border: 1px solid rgba(241, 217, 164, 0.35); opacity: 0; transition: opacity 0.25s;
+    }
+    #prompt.on { opacity: 1; }
+    #toast {
+      position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: clamp(18px, 2.3vw, 29px); font-style: italic;
+      text-shadow: 0 2px 18px rgba(0, 0, 0, 0.9); opacity: 0; transition: opacity 1s; white-space: nowrap;
+    }
+    #toast.on { opacity: 1; }
+    #corner { position: absolute; right: 22px; bottom: 16px; font-size: 13px; opacity: 0.6; text-align: right; text-shadow: 0 1px 6px #000; line-height: 1.9; }
+    #reticle { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2px; border-radius: 50%; background: rgba(241, 217, 164, 0.55); box-shadow: 0 0 4px #000; }
+
+    /* ---- small centred panels ---- */
+    .panel {
+      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 7; text-align: center; padding: 30px 44px;
+      background: rgba(13, 10, 7, 0.82); border: 1px solid var(--line); display: none; min-width: min(460px, 86vw);
+    }
+    .panel.on { display: block; }
+    .panel h2 { font-size: clamp(17px, 2vw, 24px); font-weight: 400; margin: 0 0 6px; }
+    .panel p { font-style: italic; opacity: 0.85; margin: 0 0 22px; font-size: 18px; }
+    #pause { cursor: pointer; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/build/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div id="objective">
+      <div id="chapLabel" class="display"></div>
+      <div id="objText"></div>
+      <div id="pips"></div>
+      <div id="foes" class="display"></div>
+    </div>
+    <div id="foeBar" style="display:none"><div id="foeName" class="display">Raider</div><div class="bar"><div id="foeFill"></div></div></div>
+    <div id="reticle"></div>
+    <div id="prompt"><span class="key">E</span><span id="promptText">Light the lamp</span></div>
+    <div id="toast"></div>
+    <div id="vitals" style="display:none"><div class="label display">Vigour</div><div class="bar"><div id="hpFill"></div></div></div>
+    <div id="corner">
+      <span class="key">Q</span> leap &nbsp; <span class="key">E</span> light / sit<br />
+      <span id="quality"></span>
+    </div>
+  </div>
+
+  <div id="start" class="loading">
+    <h1 class="display">Shore of Stone</h1>
+    <div class="rule"></div>
+    <div class="sub">A lone warrior walks the old road to the temples by the sea. Wake their lamps.</div>
+    <div id="status" class="display">Raising the sky…</div>
+    <div id="chapters">
+      <button class="card sel"><img src="./assets/img/road.jpg" alt="" /><span><span class="n display">Chapter I</span><span class="t">The Temple Road</span></span></button>
+      <button class="card"><img src="./assets/img/rathas.jpg" alt="" /><span><span class="n display">Chapter II</span><span class="t">The Five Rathas</span></span></button>
+      <button class="card"><img src="./assets/img/shore.jpg" alt="" /><span><span class="n display">Chapter III</span><span class="t">The Shore Temple</span></span></button>
+      <button class="card"><img src="./assets/img/headland.jpg" alt="" /><span><span class="n display">Chapter IV</span><span class="t">The Headland</span></span></button>
+    </div>
+    <button id="begin" class="btn display">Begin</button>
+    <div id="keys">
+      <b>W</b><b>A</b><b>S</b><b>D</b> walk &nbsp;·&nbsp; <b>Shift</b> run &nbsp;·&nbsp; <b>Mouse</b> look<br />
+      <b>E</b> light a lamp, sit on a bench &nbsp;·&nbsp; <b>Q</b> leap &nbsp;·&nbsp; <b>G</b> graphics quality &nbsp;·&nbsp; <b>Esc</b> pause
+    </div>
+  </div>
+
+  <div id="fade">
+    <div id="fadeNum" class="display"></div>
+    <div id="fadeTitle" class="display"></div>
+    <div class="rule"></div>
+    <div id="fadeSub" class="sub"></div>
+    <div id="fadeStatus" class="display"></div>
+  </div>
+
+  <div id="cine">
+    <video id="cineVideo" playsinline preload="auto"></video>
+    <div id="cineText"><div id="cineNum" class="display"></div><div id="cineTitle" class="display"></div></div>
+    <div id="cineSkip"><span class="key">Enter</span> or click to skip</div>
+  </div>
+
+  <div id="won" class="panel">
+    <h2 id="wonTitle" class="display"></h2>
+    <p>The stones remember. The road goes on.</p>
+    <div class="row"><button id="wonNext" class="btn display"></button><button id="wonStay" class="btn quiet display">Keep exploring</button></div>
+  </div>
+
+  <div id="pause" class="panel">
+    <h2 class="display">Paused</h2>
+    <p>Click to take up the sword again.</p>
+  </div>
+
+  <div id="end" class="hidden">
+    <h1 class="display">The shore remembers</h1>
+    <div class="rule"></div>
+    <div class="sub">Road, rock, temple and headland — every flame answers the sea. Twelve centuries of salt and wind, and the stone still stands.</div>
+    <div class="row"><button id="endStay" class="btn display">Stay for the sunset</button><button id="endAgain" class="btn quiet display">Begin again</button></div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
